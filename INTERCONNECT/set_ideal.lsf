@@ -1,0 +1,56 @@
+clear;
+switchtodesign;
+
+theta0 = 30;
+N = 8;
+f0 = 10e9;
+fmin = 7.5e9;
+fmax = 12.5e9;
+L0 = 1e-3;
+ng = 4.2;
+neff = 2.39;
+
+lambda0 = c/f0;
+d = lambda0/2;
+dtau = d*sin(theta0*pi/180)/c;
+
+setnamed("::Root Element::",
+         "temperature",300);
+
+setnamed("MZM_1",
+         "insertion loss",0);
+
+setnamed("MZM_1",
+         "extinction ratio",100);
+
+for (n=1:N) {
+    
+    dL = c*dtau/ng;
+    L = L0 + (n-1)*dL;
+    setnamed("WGD_"+num2str(n),
+             "length",L);
+             
+    setnamed("WGD_"+num2str(n),
+         "effective index 1",neff);
+
+    setnamed("WGD_"+num2str(n),
+         "group index 1",ng);
+
+    setnamed("WGD_"+num2str(n),
+             "loss 1",0);
+
+    setnamed("WGD_"+num2str(n),
+             "dispersion 1",0);
+
+    setnamed("WGD_"+num2str(n),
+             "thermal effects",false);
+
+    setnamed("PIN_"+num2str(n),
+             "enable thermal noise",false);
+
+    setnamed("PIN_"+num2str(n),
+             "dark current",0);
+
+    setnamed("PIN_"+num2str(n),
+             "responsivity",1);
+}

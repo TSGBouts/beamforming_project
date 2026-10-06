@@ -1,0 +1,224 @@
+clear;
+switchtodesign;
+
+run;
+
+output_file = "photonic_ttd_30deg";
+
+theta0 = 30;
+N = 8;
+f0 = 10e9;
+fmin = 7.5e9;
+fmax = 12.5e9;
+L0 = 1e-3;
+ng = 4.2;
+neff = 2.39;
+
+lambda0 = c/f0;
+d = lambda0/2;
+dtau = d*sin(theta0*pi/180)/c;
+dL = c*dtau/ng;
+
+# Get frequency vector
+R = getresult("ENA_1","input 1/transmission");
+f = getparameter(R,"frequency");
+
+# Store transmission responses
+H = matrix(length(f),N);
+
+for (n=1:N) {
+    R = getresult("ENA_1","input "+num2str(n)+"/transmission");
+    H(:,n) = R.transmission;
+}
+
+# Frequency range used for plots and delay extraction
+idx = find((f >= fmin) & (f <= fmax));
+
+# Allocate matrices
+Hrel = matrix(length(f),N);
+Hrel_dB = matrix(length(f),N);
+phirel = matrix(length(f),N);
+
+tau_req = matrix(N,1);
+tau_meas = matrix(N,1);
+tau_err = matrix(N,1);
+
+# Calculate relative responses
+for (n=1:N) {
+
+    Hrel(:,n) = H(:,1)/H(:,n);
+    Hrel_dB(:,n) = 20*log10(abs(Hrel(:,n)));
+
+    phirel(:,n) = unwrap(angle(Hrel(:,n)))*180/pi;
+
+    tau_req(n) = (n-1)*dtau;
+
+    phi = unwrap(angle(Hrel(:,n)));
+    p = polyfit(f(idx),phi(idx),1);
+    
+    tau_meas(n) = -p(2)/(2*pi);
+
+    tau_err(n) = tau_meas(n) - tau_req(n);
+}
+
+# Relative phase plot
+plot(f(idx)/1e9,phirel(idx,1),
+     "Frequency (GHz)",
+     "Relative phase (deg)",
+     "Relative phase");
+
+holdon;
+
+for (n=2:N) {
+    plot(f(idx)/1e9,phirel(idx,n));
+}
+
+holdoff;
+
+legend("Ch1","Ch2","Ch3","Ch4","Ch5","Ch6","Ch7","Ch8");
+
+# Required vs measured delay
+plot(1:N,tau_req*1e12,
+     "Channel",
+     "Delay (ps)",
+     "Required vs measured delay");
+
+holdon;
+
+plot(1:N,tau_meas*1e12);
+
+holdoff;
+
+legend("Required","Measured");
+
+plot(1:N,tau_err*1e12,
+     "Channel",
+     "Delay error (ps)",
+     "Delay error");
+
+# Print delay values
+?"Required delays [ps]:";
+?tau_req*1e12;
+
+?"Measured delays [ps]:";
+?tau_meas*1e12;
+
+?"Delay errors [ps]:";
+?tau_err*1e12;
+
+# Data for MATLAB export
+f_export = f(idx);
+
+H_export = matrix(length(f_export),N);
+Hrel_export = matrix(length(f_export),N);
+Hrel_dB_export = matrix(length(f_export),N);
+phirel_export = matrix(length(f_export),N);
+L_export = matrix(N,1);
+
+for (n=1:N) {
+    
+    L_export(n) = getnamed("WGD_"+num2str(n),"length");
+    H_export(:,n) = H(idx,n);
+
+    Hrel_export(:,n) = H_export(:,1)/H_export(:,n);
+
+    Hrel_dB_export(:,n) =
+        20*log10(abs(Hrel_export(:,n)));
+
+    phirel_export(:,n) =
+        unwrap(angle(Hrel_export(:,n)))*180/pi;
+}
+
+# Delay error statistics
+sum_abs_err = 0;
+sum_sq_err = 0;
+max_abs_err = 0;
+
+for (n=1:N) {
+
+    err_abs = abs(tau_err(n));
+
+    sum_abs_err = sum_abs_err + err_abs;
+    sum_sq_err = sum_sq_err + tau_err(n)*tau_err(n);
+
+    if (err_abs > max_abs_err) {
+        max_abs_err = err_abs;
+    }
+}
+
+tau_MAE = sum_abs_err/N;
+tau_RMS = sqrt(sum_sq_err/N);
+tau_MAX = max_abs_err;
+
+?"Mean absolute delay error [ps]:";
+?tau_MAE*1e12;
+
+?"RMS delay error [ps]:";
+?tau_RMS*1e12;
+
+?"Worst-case delay error [ps]:";
+?tau_MAX*1e12;
+
+wg_loss = getnamed("WGD_1","loss 1");
+wg_dispersion = getnamed("WGD_1","dispersion 1");
+
+mzm_insertion_loss =
+    getnamed("MZM_1","insertion loss");
+
+mzm_extinction_ratio =
+    getnamed("MZM_1","extinction ratio");
+
+pin_responsivity =
+    getnamed("PIN_1","responsivity");
+
+pin_dark_current =
+    getnamed("PIN_1","dark current");
+    
+temperature =
+    getnamed("WGD_1","temperature");
+
+nominal_temperature =
+    getnamed("WGD_1","nominal temperature");
+
+thermal_fill_factor =
+    getnamed("WGD_1","thermal fill factor");
+
+ng_actual =
+    getnamed("WGD_1","group index 1");
+
+# Export to MATLAB
+matlabsave(
+    output_file,
+
+    f_export,
+    H_export,
+    Hrel_export,
+    Hrel_dB_export,
+    phirel_export,
+
+    tau_req,
+    tau_meas,
+    tau_err,
+    tau_MAE,
+    tau_RMS,
+    tau_MAX,
+
+    L_export,
+
+    theta0,
+    f0,
+    ng,
+    neff,
+
+    wg_loss,
+    wg_dispersion,
+    mzm_insertion_loss,
+    mzm_extinction_ratio,
+    pin_responsivity,
+    pin_dark_current,
+    
+    temperature,
+    nominal_temperature,
+    thermal_fill_factor,
+    ng_actual
+);
